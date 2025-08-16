@@ -1,0 +1,97 @@
+---
+title: "PP433 Problem Set 00_Solution"
+author: "Anushka Gutte"
+format: 
+  html:
+    embed-resources: true
+editor: visual
+---
+
+## Loading the Data
+
+```{r, warning = FALSE, message = FALSE}
+
+library(foreign)
+library(readstata13)
+library(tidyverse)
+library(huxtable)
+
+schools <- read.dta13('PublicPrivate.dta')
+names(schools) <- tolower(names(schools))
+schools$type <- factor(schools$public, levels = c(0, 1),
+                       labels = c('Private', "Public"))
+head(schools)
+```
+
+# Problems
+
+## 1. Is there an association between graduation rates and school type?
+
+As shown below, the graduation rate is lower by 9.15% when you are in a public school relative to baseline, i.e. private school. This difference is statistically significant.
+
+```{r, warning = FALSE, message = FALSE}
+
+schooltype_reg <- lm(pctgrad ~ 1 + type, data = schools)
+summary(schooltype_reg)
+
+```
+
+### Checking for magnitude
+
+Given the mean and standard deviation as 49.7% and 18 respectively, a 9% gap can be interpreted as a moderate effect size.
+
+```{r, warning=FALSE, message=FALSE}
+
+summary(schools$pctgrad)
+sd(schools$pctgrad)
+
+qplot(schools$pctgrad)
+
+```
+
+## 2. Can the above association be explained by other school characteristics?
+
+The results below show that after controlling for SAT scores and financial aid, average graduation rates are lower by 6.16% in public schools relative to private school. This difference is again statistically significant. It is called a controlled difference because we are isolating the effect of being in a public school on graduation rate while accounting for the impact of financial aid and SAT scores in the model. The coefficient in the previous model (9%) was probably reflecting the impact of the type of school as well as other school characteristics, especially SAT scores. However, even after controlling for these factors, the coefficient is large in terms of statistical difference and magnitude.
+
+```{r, warning = FALSE, message=FALSE}
+
+controlled_reg <- lm(pctgrad ~ type + sat + finaid, data = schools)
+summary(controlled_reg)
+
+```
+
+## 3. Comparing different regression models
+
+Yes, the relationships between sat and pctgrad are different for public and private schools. On average, a one point increase in SAT scores in a public school leads to to an additional increase in graduation rate by 1.3% relative to private schools. Similarly, a one point increase in financial aid in public school increases graduation rate by 0.19%. Both effects are statistically significant. This shows that both factors have a higher impact in public schools, which may indicate that policies improving SAT scores and increassing financial aid could yeild bigger improvements in graduation rates of students in pubic schools. Therefore, more targeted interventions could work towards closing the public-private gap in outcomes.
+
+```{r, warning=FALSE, message=FALSE}
+
+lm1 <- lm(pctgrad ~ public, data = schools)
+lm2 <- lm(pctgrad ~ public + sat + finaid, data = schools)
+lm3 <- lm(pctgrad ~ public + sat + finaid + public*(sat + finaid), data = schools)
+
+huxreg(lm1, lm2, lm3)
+
+```
+
+## 4. Plotting the results
+
+### Calculating intercept and slope
+
+```{r, warning=FALSE, message=FALSE}
+
+private_intercept <- -33.424 + (-0.078 * mean(schools$finaid))
+private_slope <- 8.663
+public_intercept <- (-33.424 - 32.237) +(0.113 * mean(schools$finaid))
+public_slope <- 8.663 + 1.306
+
+```
+
+### Plotting the data
+
+```{r, warning=FALSE, message=FALSE}
+
+
+ggplot(schools, aes(x=sat, y=pctgrad)) + geom_point(size=0.75, alpha=0.5) + geom_abline(slope = public_slope, intercept = public_intercept, color = "blue") + geom_abline(slope = private_slope, intercept = private_intercept, color = "red") + labs(title = "Graduation rate vs SAT score", x = "SAT score", y = "Graduation rate (%)") + theme_classic() 
+
+```

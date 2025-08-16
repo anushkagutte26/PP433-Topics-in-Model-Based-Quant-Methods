@@ -1,0 +1,202 @@
+---
+title: "PP433 Problem Set 01 - Solution"
+author: Anushka Gutte
+format:
+  html:
+      self_contained: true
+      embed-resources: true
+editor: visual
+---
+
+# Problem 1
+
+### (a) What is the model being fit?
+
+### $$sat_i = \alpha_{j[i]} + \beta_1sat.pre_i + \beta_2FRL_i + \beta_3gender_i + \epsilon_i$$
+
+#### $$
+\epsilon_i \sim N(0, \sigma_y^2)
+$$
+
+### $$ \alpha_j = \mu_\alpha + \gamma_1rural_j + \upsilon_j $$
+
+#### $$
+\upsilon_j \sim N(0, \sigma_j^2)
+$$
+
+### (b) Write the model in reduced form?
+
+### $$
+sat_i = \mu + \gamma_1rural + \upsilon_j + \beta_1sat.pre_i + \beta_2FRL_i + \beta_3gender + \epsilon_i
+$$
+
+### (c) Changing the model formula
+
+### $$sat_i = \alpha_{j[i]} + \beta_1sat.pre_i + \beta_2FRL_i + \beta_{3j}gender_i + \epsilon_i$$
+
+#### $$
+\alpha_j = \mu_\alpha + \gamma_{01}rural_j + \upsilon_{0j} 
+$$
+
+#### $$\beta_{3j} = \gamma_{10} + \gamma_{11}rural_j + \upsilon_{1j} $$
+
+Reduced Form:
+
+### $$sat_i = \mu_\alpha + \gamma_{01}rural_j + \upsilon_{0j}  + \beta_1sat.pre_i + \beta_2FRL_i + \gamma_{10}gender_i + \gamma_{11}rural_j \times gender_i+ \upsilon_{1j}gender_i + \epsilon_i$$
+
+### (d) Different questions across models
+
+1.  Model (a) and (b)
+
+    What is the difference in SAT scores between students in rural and urban schools for the baseline gender group?
+
+    How much of the variation in SAT scores in explained by school level characteristics after controlling for individual-level variables? (By looking at the variance in the random intercept)
+
+2.  Model (c) : Does the impact of gender on SAT scores differ for students in rural versus urban schools
+
+### (e) Motivation for part (c) model
+
+Through model (c) we can check if the effect of gender on SAT scores differs between students in rural and urban schools. For instance, urban schools might have more educational resources or different gender dynamics which could allow female students to do better than they would have in a rural setting. Knowing these kind of hetergeneous effects helps us create more targeted interventions.
+
+## Problem 2: Practice Aggregating Data
+
+### (a) Summarised Data Frame
+
+```{r}
+
+library(tidyverse)
+library(readstata13)
+
+library(dplyr)
+
+data <- read.dta13("neighborhood.dta")
+
+head(data)
+
+group_data <- data %>%
+  group_by(neighid) %>%
+  summarise(mean_attain = mean(attain),
+    proportion_male = mean(male),
+    obs = n())
+
+head(group_data)
+
+```
+
+### (b) Plotting the Male Proportion
+
+Yes, there is a spike in count of neighbourhoods with 0 or 1 proportion of male. There are many neighbourhoods in the data which have either only female students or only male students
+
+```{r}
+
+
+library(ggplot2)
+
+ggplot(group_data, aes(x = proportion_male)) +  geom_histogram(color = "black", fill = "skyblue") +
+  labs(x = "Proportion Male",
+       y = "Count of Neighborhoods") +
+  theme_minimal()
+
+```
+
+### (c) Observations by neighbourhood
+
+The average number of observations per neighbourhood is only 4. A small sample size in the neighbourhood could increase the likelihood of the extreme proportions of male students we find in the previous histogram.
+
+```{r}
+
+average_obs <- mean(group_data$obs)
+sd_obs <- sd(group_data$obs)
+
+average_obs
+sd_obs
+
+
+```
+
+### (d) Visualising Deprivation and Attainment
+
+The plot shows a negative relationship between social deprivation score and average attainment. students in more deprived areas tend to have lower educational outcomes. However, the data points are more widespread in the bottom left corner, here students are in less deprived neighbourhoods but still have lower average atainment. This could result from the fact that the average sample size of neighbourhoods is low, making some of the nieghbourhoods less reliable.
+
+```{r}
+
+
+group_data <- merge(group_data, data[, c("neighid", "deprive")], by = "neighid", all.x = TRUE)
+
+head(group_data)
+
+
+ggplot(group_data, aes(x = deprive, y = mean_attain)) + geom_point(color =   "blue") + labs(title = "Scatter Plot of Social deprivation score vs. Average attainment", x = "Social deprivation score", y = "Average attainment") +
+  theme_minimal()
+
+```
+
+### Problem 3: Modelling the Neighbourhood Data
+
+#### (a) Random Intercept Model
+
+```{r}
+
+library(lme4) 
+mod_re <- lmer(attain ~ 1 + (1 | neighid), data = data)
+
+library(arm) 
+display(mod_re)
+
+
+```
+
+```{r}
+var_between <- (sigma.hat(mod_re)$sigma$neighid)^2
+var_within <- (sigma.hat(mod_re)$sigma$data)^2 
+
+```
+
+The variance between neighbourhoods is 0.20 and variance within neighbourhoods is 0.80.
+
+#### (b) Calculating ICC
+
+```{r}
+
+ICC <- var_between/(var_between + var_within)
+
+ICC
+
+```
+
+ICC of 0.20 means that 20% of the variance in attainment is due to differences between neighbourhoods, while the remaining 80% is due to individual-level (within-neighbourhood) differences.
+
+#### (c) Changes in Variance with Controls
+
+```{r}
+mod_deprive <- lmer(attain ~ deprive + (1 | neighid), data = data)
+
+display(mod_deprive)
+```
+
+The coefficient estimate for deprive reflects the results we inferred from previous scatter plot. An increase in social deprivation score reduces the average attainment by 0.52.
+
+By including 'deprive' as a covariate, we expect the variance at the neighbourhood level (between-group variance) to decrease if deprive explains part of the neighbourhood-level differences in attainment. However, the random intercept variance (standard deviation of 0.30) is still quite large, suggesting that much of the between-neighbourhood variability in attainment has not been explained by deprive alone. There are other student level factors at play here.
+
+The residual variance of 0.90 indicates that, even after accounting for neighbourhood differences and deprive, there is still substantial within-neighbourhood variability in attainment.
+
+#### (d) Fitting a Model with Full Controls
+
+```{r}
+mod_full_controls <- lmer(attain ~ deprive + p7vrq + p7read + dadocc + dadunemp + daded + momed + male + (1 | neighid), data = data)
+
+display(mod_full_controls)
+
+
+var_between_full <- (sigma.hat(mod_full_controls)$sigma$neighid)^2
+var_within_full <- (sigma.hat(mod_full_controls)$sigma$data)^2 
+
+ICC_full <- var_between_full / (var_between_full + var_within_full)
+
+ICC_full
+
+```
+
+The standard deviation of between-neighbourhood has decreased from 0.45 to 0.08. This means that much of the variation previously attributed to neighbourhood differences is now explained by individual-level factors (here pre-test scores, parents' education) The within-neighbourhood standard deviation has also decreased, but remains relatively high at 0.68. There is still great amount of variation in attainment among students within the same neighbourhood.
+
+The ICC has dropped significantly from 20% in the baseline model to 1.45% in the full controls model. This means that most of the variation in attainment is now explained by student-level factors rather than neighbourhood differences.
